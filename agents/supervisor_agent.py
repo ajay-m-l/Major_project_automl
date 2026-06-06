@@ -168,45 +168,64 @@ def detect_intent_node(state: SupervisorState) -> SupervisorState:
 
 
 def handle_explain(state: SupervisorState) -> SupervisorState:
-    """
-    User said 'explain that' or 'what does this mean'.
-    We already have the previous output in memory — use Ollama to explain it.
-    """
     last_output = state.get("last_output", "")
     query = state["user_query"]
 
     if not last_output:
         return {
             **state,
-            "agent_output": "There is no previous output to explain yet. Please run an analysis first.",
+            "agent_output": "No previous result found. Please run something first.",
             "selected_agent": "memory",
         }
 
-    # Use Ollama if available to explain the output in plain language
+    # 🔥 LIMIT SIZE (CRITICAL FIX)
+    short_output = last_output[:800]
+    short_query = query[:200]
+
     if check_ollama_health():
-        prompt = f"""A data analysis tool produced the following output:
+        prompt = f"""
+You are a data analyst.
 
-{last_output}
+Here is the result from a data analysis tool:
+{short_output}
 
-The user is asking: "{query}"
+User question:
+{short_query}
 
-Explain the above output in clear, simple, non-technical language.
-Focus on what the numbers mean, what patterns are important, and what a business user should understand.
-Be concise and direct. Do not repeat the raw numbers — interpret them."""
+Explain this in simple terms.
+Focus on:
+- What the result means
+- Key patterns or relationships
+- Simple business understanding
+
+Do NOT repeat raw values. Keep it short and clear.
+"""
 
         explanation = ollama_generate(prompt)
-        if explanation.startswith("[ERROR]"):
-            explanation = _fallback_explain(last_output)
+
+        # 🔥 STRICT VALIDATION (VERY IMPORTANT)
+        if (
+            not explanation
+            or explanation.strip() == ""
+            or explanation.startswith("[ERROR]")
+            or len(explanation.strip()) < 20
+        ):
+            explanation = _fallback_explain(short_output)
+            fallback = True
+        else:
+            fallback = False
+
     else:
-        explanation = _fallback_explain(last_output)
+        explanation = _fallback_explain(short_output)
+        fallback = True
 
     return {
         **state,
         "agent_output": explanation,
+        "final_response": explanation,
         "selected_agent": "explain_memory",
-        "used_fallback_routing": not check_ollama_health(),
+        "used_fallback_routing": fallback,
     }
-
 
 def _fallback_explain(output: str) -> str:
     """Rule-based explanation when Ollama is offline."""
@@ -268,14 +287,18 @@ Keep it under 200 words. Use plain language."""
         insight = ollama_generate(prompt)
         if insight.startswith("[ERROR]"):
             insight = _fallback_business_insight(ml_result, last_output)
+            fallback = True
+        else:
+            fallback = False
     else:
         insight = _fallback_business_insight(ml_result, last_output)
+        fallback = True
 
     return {
         **state,
         "agent_output": insight,
         "selected_agent": "business_insight",
-        "used_fallback_routing": not check_ollama_health(),
+        "used_fallback_routing": fallback,
     }
 
 
@@ -328,16 +351,85 @@ def _fallback_business_insight(ml_result: dict, last_output: str) -> str:
     return "\n".join(lines)
 
 
-def supervisor_decide(state: SupervisorState) -> SupervisorState:
-    """Call LLM or keyword routing to pick which agent handles the query."""
+# def supervisor_decide(state: SupervisorState) -> SupervisorState:
+#     """Call LLM or keyword routing to pick which agent handles the query."""
+#     query = state["user_query"]
+#     logger.info(f"Supervisor deciding for: {query[:80]}")
+
+#     ollama_up = check_ollama_health()
+
+#     if not ollama_up:
+#         agent_name, agent_input = _keyword_route(query)
+#         return {
+#             **state,
+#             "selected_agent": agent_name,
+#             "agent_input": agent_input,
+#             "error": None,
+#             "used_fallback_routing": True,
+#         }
+
+#     prompt = _build_prompt(query, state["schema_text"], state["memory_context"])
+#     raw = ollama_generate(prompt)
+#     logger.debug(f"LLM response: {raw[:200]}")
+
+#     if not raw.startswith("[ERROR]"):
+#         agent_name, agent_input = _parse_llm_response(raw)
+#         if agent_name and agent_name in AGENT_REGISTRY:
+#             return {
+#                 **state,
+#                 "selected_agent": agent_name,
+#                 "agent_input": agent_input or query,
+#                 "error": None,
+#                 "used_fallback_routing": False,
+#             }
+
+#     # Keyword fallback
+#     agent_name, agent_input = _keyword_route(query)
+#     return {
+#         **state,
+#         "selected_agent": agent_name,
+#         "agent_input": agent_input,
+#         "error": None,
+#         "used_fallback_routing": True,
+#     }
+
+
+
+
+def safe_llm_call(prompt):
+    """Retry LLM call once before failing"""
+    raw = ollama_generate(prompt)
+
+    if raw and not raw.startswith("[ERROR]"):
+        return raw
+
+    logger.warning("Retrying LLM once...")
+    raw = ollama_generate(prompt)
+
+    if raw and not raw.startswith("[ERROR]"):
+        return raw
+
+    return None
+
+
+def supervisor_decide(state):
     query = state["user_query"]
     logger.info(f"Supervisor deciding for: {query[:80]}")
 
-    ollama_up = check_ollama_health()
-    dataset_name = state.get("dataset_name", "unknown")
+    query_lower = query.lower()
 
-    # For non-Iris datasets, prefer keyword routing to avoid LLM issues
-    if dataset_name != "iris":
+    # 🔥 RULE-BASED OVERRIDE (CRITICAL FIX)
+    if "outlier" in query_lower:
+        return {
+            **state,
+            "selected_agent": "cleaning_agent",
+            "agent_input": "remove_outliers",  # force correct tool
+            "error": None,
+            "used_fallback_routing": False,
+        }
+
+    # If Ollama is completely down → fallback
+    if not check_ollama_health():
         agent_name, agent_input = _keyword_route(query)
         return {
             **state,
@@ -347,24 +439,35 @@ def supervisor_decide(state: SupervisorState) -> SupervisorState:
             "used_fallback_routing": True,
         }
 
-    if ollama_up:
-        prompt = _build_prompt(query, state["schema_text"], state["memory_context"])
-        raw = ollama_generate(prompt)
-        logger.debug(f"LLM response: {raw[:200]}")
+    # Build LLM prompt
+    # 🔥 LIMIT PROMPT SIZE (CRITICAL FIX)
+    short_schema = state["schema_text"][:300]
+    short_memory = state["memory_context"][-300:]
 
-        if not raw.startswith("[ERROR]"):
-            agent_name, agent_input = _parse_llm_response(raw)
-            if agent_name and agent_name in AGENT_REGISTRY:
-                return {
-                    **state,
-                    "selected_agent": agent_name,
-                    "agent_input": agent_input or query,
-                    "error": None,
-                    "used_fallback_routing": False,
-                }
+    prompt = _build_prompt(query, short_schema, short_memory)
 
-    # Keyword fallback
+    # 🔥 SAFE CALL (with retry)
+    raw = safe_llm_call(prompt)
+
+    print("LLM RAW OUTPUT:", raw)
+
+    if raw:
+        agent_name, agent_input = _parse_llm_response(raw)
+
+        if agent_name and agent_name in AGENT_REGISTRY:
+            return {
+                **state,
+                "selected_agent": agent_name,
+                "agent_input": agent_input or query,
+                "error": None,
+                "used_fallback_routing": False,
+            }
+
+    # ⚡ Only fallback if LLM truly failed
+    logger.warning("⚡ Falling back to keyword routing")
+
     agent_name, agent_input = _keyword_route(query)
+
     return {
         **state,
         "selected_agent": agent_name,
@@ -378,6 +481,20 @@ def run_selected_agent(state: SupervisorState) -> SupervisorState:
     """Run the chosen specialized agent."""
     agent_name = state.get("selected_agent")
     agent_input = state.get("agent_input", state["user_query"])
+
+
+    if not agent_name:
+        return {**state, "agent_output": "No agent selected. Please try again."}
+
+    # 🔥 CRITICAL FIX — DIRECT TOOL EXECUTION
+    if agent_name == "cleaning_agent" and "remove_outliers" in agent_input:
+        try:
+            from tools.cleaning_tool import remove_outliers
+            output = remove_outliers(agent_input)
+            return {**state, "agent_output": output}
+        except Exception as e:
+            logger.error(f"remove_outliers failed: {e}", exc_info=True)
+            return {**state, "agent_output": f"Error removing outliers: {e}"}
 
     if not agent_name:
         return {**state, "agent_output": "No agent selected. Please try again."}

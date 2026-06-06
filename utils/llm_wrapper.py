@@ -19,7 +19,7 @@ class OllamaLLM(LLM):
     """
     LangChain LLM wrapper that routes calls to a local Ollama instance.
 
-    Uses phi3 by default (lightweight, suitable for low-RAM systems).
+    Uses phi3:latest by default (lightweight, suitable for low-RAM systems).
     """
 
     model: str = Field(default=DEFAULT_MODEL, description="Ollama model name")
@@ -69,7 +69,7 @@ def get_llm(model: str = DEFAULT_MODEL) -> OllamaLLM:
     Factory function to create an OllamaLLM instance.
 
     Args:
-        model: Ollama model name (default: phi3)
+        model: Ollama model name (default: phi3:latest)
 
     Returns:
         Configured OllamaLLM instance

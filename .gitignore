@@ -3,11 +3,13 @@ venv/
 .env/
 .venv/
 
+
 # Python cache files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+**/node_modules/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/

@@ -161,6 +161,42 @@ def fill_missing_mode(query: str = "") -> str:
     except Exception as e:
         logger.error(f"fill_missing_mode error: {e}")
         return f"Error filling categorical missing values: {e}"
+    
+@tool
+def remove_outliers(query: str = "") -> str:
+    """
+    Remove outliers from numeric columns using Z-score method (threshold = 3).
+    """
+    try:
+        df = _require_dataset()
+
+        numeric_cols = df.select_dtypes(include="number").columns
+        df_cleaned = df.copy()
+
+        before_rows = len(df_cleaned)
+
+        for col in numeric_cols:
+            mean = df_cleaned[col].mean()
+            std = df_cleaned[col].std()
+
+            if std == 0:
+                continue
+
+            z_scores = (df_cleaned[col] - mean) / std
+            df_cleaned = df_cleaned[(z_scores.abs() < 3)]
+
+        after_rows = len(df_cleaned)
+        removed = before_rows - after_rows
+
+        _save(df_cleaned)
+
+        logger.info(f"Removed {removed} outliers.")
+
+        return f"Removed {removed} outlier rows. Dataset now has {after_rows} rows."
+
+    except Exception as e:
+        logger.error(f"remove_outliers error: {e}")
+        return f"Error removing outliers: {e}"
 
 
 @tool

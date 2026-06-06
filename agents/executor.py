@@ -73,8 +73,12 @@ class AgentSystem:
             last_ml_result=last_ml_result,
         )
 
-        # Attach figure if visualization ran
-        result["figure"] = visualization_tool.get_last_figure()
+        # Attach a visualization figure only when the visualization agent ran.
+        figure = visualization_tool.get_last_figure() if result.get("selected_agent") == "visualization_agent" else None
+        result["figure"] = figure
+
+        if result.get("selected_agent") != "visualization_agent":
+            visualization_tool.clear_last_figure()
 
         # Determine if a figure was generated
         figure_generated = result["figure"] is not None

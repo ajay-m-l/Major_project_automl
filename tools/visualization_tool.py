@@ -31,6 +31,12 @@ def get_last_figure():
     return _last_figure
 
 
+def clear_last_figure():
+    """Clear the stored visualization figure."""
+    global _last_figure
+    _last_figure = None
+
+
 def _require_dataset() -> pd.DataFrame:
     if _dataset is None:
         raise ValueError("No dataset loaded.")
