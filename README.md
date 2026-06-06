@@ -210,8 +210,8 @@ project-root/
 ### Clone Repository
 
 ```bash
-git clone https://github.com/your-username/Conversational-AUTOML-for-Automated-Data-Analysis.git
-cd Conversational-AUTOML-for-Automated-Data-Analysis
+git clone https://github.com/ajay-m-l/Major_project_automl.git
+cd Major_project_automl
 ```
 
 ### Create Virtual Environment
@@ -220,40 +220,60 @@ cd Conversational-AUTOML-for-Automated-Data-Analysis
 python -m venv myenv
 ```
 
-### Activate Environment
+### Activate Virtual Environment
 
-Windows:
+#### Windows
 
 ```bash
 myenv\Scripts\activate
 ```
 
-Linux/Mac:
+#### Linux / macOS
 
 ```bash
 source myenv/bin/activate
 ```
 
-### Install Dependencies
+### Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Start Backend
+### Run Backend Server
 
 ```bash
 cd backend
 uvicorn app:app --reload
 ```
 
-### Start Frontend
+Backend API will be available at:
+
+```text
+http://localhost:8000
+```
+
+### Install Frontend Dependencies
+
+Open a new terminal:
 
 ```bash
 cd frontend
 npm install
+```
+
+### Run Frontend
+
+```bash
 npm start
 ```
+
+Frontend application will be available at:
+
+```text
+http://localhost:3000
+```
+
 
 ---
 
