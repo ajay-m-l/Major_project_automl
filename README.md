@@ -244,7 +244,7 @@ pip install -r requirements.txt
 
 ```bash
 cd backend
-uvicorn app:app --reload
+python app.py
 ```
 
 Backend API will be available at:
@@ -273,6 +273,8 @@ Frontend application will be available at:
 ```text
 http://localhost:3000
 ```
+<img width="1906" height="909" alt="image" src="https://github.com/user-attachments/assets/02224f41-dfd0-4fdf-a149-2668dbd495b6" />
+
 
 
 ---
@@ -312,6 +314,3 @@ RV College of Engineering, Bengaluru
 
 ---
 
-## License
-
-This project is developed for academic and research purposes.
