@@ -1,4 +1,4 @@
-# Conversational AutoML for Automated Data Analysis
+# Conversational Mulit-Agent AutoML System for Automated Data Analysis
 
 ## Overview
 
